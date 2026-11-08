@@ -1,0 +1,45 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "proposals": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "P1",
+              "P2"
+            ]
+          },
+          "direction": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "edit_prompt": {
+            "type": "string",
+            "maxLength": 900
+          }
+        },
+        "required": [
+          "id",
+          "direction",
+          "edit_prompt"
+        ]
+      }
+    },
+    "difference": {
+      "type": "string",
+      "maxLength": 500
+    }
+  },
+  "required": [
+    "proposals",
+    "difference"
+  ]
+}

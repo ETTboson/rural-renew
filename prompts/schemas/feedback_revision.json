@@ -1,0 +1,28 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "observation": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "hypothesis": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "primary_change": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "edit_prompt": {
+      "type": "string",
+      "maxLength": 900
+    }
+  },
+  "required": [
+    "observation",
+    "hypothesis",
+    "primary_change",
+    "edit_prompt"
+  ]
+}

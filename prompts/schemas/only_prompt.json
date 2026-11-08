@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "direction": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "edit_prompt": {
+      "type": "string",
+      "maxLength": 900
+    }
+  },
+  "required": [
+    "direction",
+    "edit_prompt"
+  ]
+}

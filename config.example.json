@@ -1,0 +1,15 @@
+{
+  "planner": {
+    "command": ["codex"],
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "medium",
+    "timeout_seconds": 420
+  },
+  "editor": {
+    "model": "qwen-image-3.0-pro",
+    "endpoint": "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+    "api_key_env": "QWEN_API_KEY",
+    "min_interval_seconds": 15,
+    "timeout_seconds": 240
+  }
+}

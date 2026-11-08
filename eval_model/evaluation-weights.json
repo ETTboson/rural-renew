@@ -1,0 +1,29 @@
+{
+  "version": "2026-10-30-user-priority-v3-standardized-dimensions",
+  "dimension_names": {
+    "ft": "乡土性",
+    "fy": "富裕",
+    "hl": "活力",
+    "yj": "宜居",
+    "zj": "整洁"
+  },
+  "numerators": {
+    "ft": 1,
+    "fy": 1,
+    "hl": 1,
+    "yj": 6,
+    "zj": 6
+  },
+  "denominator": 15,
+  "meaning": "User preference utility over five separately standardized frozen-model outputs. Equal weights now apply to equal within-dimension standard-deviation gains.",
+  "score_definition": {
+    "version": "five-dimension-standardized-v1",
+    "parameters": "calibration/objective.json",
+    "aggregation_order": "standardize_each_dimension_then_weight",
+    "per_dimension_formula": "S_d = 50 + 10 * (P_d - mu_d) / sigma_d",
+    "total_formula": "0.4*S_yj + 0.4*S_zj + (S_ft+S_fy+S_hl)/15",
+    "clip_scores": false,
+    "auxiliary_display": "fixed_reference_percentiles",
+    "interface": "eval_model.EvaluationScorer"
+  }
+}

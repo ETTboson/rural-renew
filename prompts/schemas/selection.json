@@ -1,0 +1,33 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "selected_id": {
+      "type": "string",
+      "enum": [
+        "candidate_1",
+        "candidate_2",
+        "candidate_3"
+      ]
+    },
+    "reason": {
+      "type": "string",
+      "maxLength": 400
+    },
+    "suspected_error_probability": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "error_reason": {
+      "type": "string",
+      "maxLength": 400
+    }
+  },
+  "required": [
+    "selected_id",
+    "reason",
+    "suspected_error_probability",
+    "error_reason"
+  ]
+}
