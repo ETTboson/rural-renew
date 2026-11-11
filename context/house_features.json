@@ -1,0 +1,35 @@
+{
+  "description": "农房的六个描述方面与十八项指标，用于观察原图和约束方案；不是评价器的五个评分维度。",
+  "dimensions": [
+    {"id": "facade", "name": "立面维度", "indicators": [
+      {"id": "facade_materials", "name": "材料构成"},
+      {"id": "facade_colors", "name": "色彩搭配"},
+      {"id": "facade_form", "name": "建筑形态"}
+    ]},
+    {"id": "window", "name": "窗口维度", "indicators": [
+      {"id": "window_opening", "name": "开口形态"},
+      {"id": "window_type", "name": "窗户类型"},
+      {"id": "window_glazing", "name": "玻璃细节"}
+    ]},
+    {"id": "door", "name": "门洞维度", "indicators": [
+      {"id": "door_material", "name": "门体材质"},
+      {"id": "door_operation", "name": "开启方式"},
+      {"id": "door_finish", "name": "表面处理"}
+    ]},
+    {"id": "roof", "name": "屋顶维度", "indicators": [
+      {"id": "roof_material", "name": "屋面材料"},
+      {"id": "roof_type", "name": "屋顶类型"},
+      {"id": "roof_slope", "name": "屋面坡度"}
+    ]},
+    {"id": "decoration", "name": "装饰维度", "indicators": [
+      {"id": "decoration_structural", "name": "结构装饰"},
+      {"id": "decoration_cultural", "name": "文化装饰"},
+      {"id": "decoration_functional", "name": "功能性装饰"}
+    ]},
+    {"id": "environment", "name": "环境维度", "indicators": [
+      {"id": "environment_natural", "name": "自然环境"},
+      {"id": "environment_cultural", "name": "人文痕迹"},
+      {"id": "environment_spatial", "name": "空间组织"}
+    ]}
+  ]
+}

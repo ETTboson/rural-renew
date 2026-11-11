@@ -8,13 +8,14 @@
 
 ## Overview
 
-An agent workflow for rural-scene renewal that connects visual planning, image editing, and five-dimensional evaluation. It develops two initial proposals, uses their evaluation feedback to plan a third, and selects an edited result.
+An agent workflow for rural-scene renewal that connects a multimodal planner, an image-editing model, and an independent five-dimensional evaluator. Structured descriptions of rural houses and regional building guidelines inform two initial directions: modernization and preservation of local character. Evaluation feedback guides a third proposal and final selection.
 
 ![Overview of the rural-renew workflow](assets/overview.png)
 
 ## Contributions
 
-- Feedback-guided renewal: explore distinct designs, use five-dimensional feedback to guide revisions, and select an evaluated candidate.
+- Domain-informed planning: describe a house through six aspects and eighteen indicators, combine those observations with regional building guidelines, and develop modernization and local-character proposals.
+- Feedback-guided renewal: compare both directions against the original and each other, use five-dimensional feedback to guide revisions, and select an evaluated candidate.
 - Five-dimensional scoring: build a rural-scene evaluator from pairwise perceptual judgments, covering rural character, prosperity, vitality, livability, and cleanliness to support consistent comparison and refinement.
 - Quantitative improvement: across all 40 evaluated scenes, rural-renew achieves a mean weighted evaluation score 2.23 points higher than the single-generation only-prompt baseline.
 
@@ -32,19 +33,35 @@ Each row shows the original photograph, the single-generation `only-prompt` resu
 
 ## How it works
 
-1. Propose two distinct renewal plans from the original photograph and optional location context.
-2. Generate one candidate for each plan and evaluate rural character, prosperity, vitality, livability, and cleanliness.
-3. Review the candidate images, their plans, and the differences in their evaluations to write a third proposal.
-4. Generate and evaluate the third candidate, then ask the agent to select an edited result.
+1. Load the six-aspect house description framework and the applicable regional building guidelines. The multimodal planner records what is visible for each indicator in the original photograph.
+2. Plan **P1: modernization** (material renewal, tidier surfaces, functional improvements, and a more orderly appearance) and **P2: local character** (rural identity, traditional elements, regional features, and cultural expression). Both follow the same task scope and domain Context.
+3. The image-editing model produces one candidate for each plan. The independent evaluator scores rural character, prosperity, vitality, livability, and cleanliness.
+4. The planner reviews the original, both candidates, their scores, and their differences. Using the same Context, it identifies tradeoffs such as loss of rural character or insufficient improvement, then writes a third proposal.
+5. Generate and evaluate the third candidate, then select an edited result.
+
+### Domain Context
+
+| House aspect | Description indicators |
+|---|---|
+| Facade | Material composition, color scheme, architectural form |
+| Windows | Opening shape, window type, glazing details |
+| Doorways | Door material, opening mechanism, surface treatment |
+| Roof | Roofing material, roof type, roof slope |
+| Decoration | Structural, cultural, and functional decoration |
+| Surroundings | Natural environment, human traces, spatial organization |
+
+These eighteen indicators describe the scene; the five perceptual dimensions evaluate it. Observations distinguish visible evidence from uncertain or hidden details. Regional guidelines supply location-specific guidance on materials, appearance, traditional features, and surrounding spaces. The bundled corpus currently covers Jilin Province; see [Context sources and format](context/README.md).
+
+Modernization and local character are design priorities within the shared exterior-editing scope. All proposals preserve the original building massing, roof form, openings, and productive spaces. Evaluation feedback can combine compatible features from the two directions without changing the evaluator's weights.
 
 Every candidate is edited from the same original photograph. The selection prompt instructs the agent to choose the highest weighted evaluation, with earlier candidates winning ties. The runner preserves the agent's actual valid choice. The original photograph is excluded from the eligible outputs.
 
-| Workflow | Agent calls | Image generations | Evaluation feedback |
-|---|---:|---:|---|
-| `only-prompt` | 1 | 1 | — |
-| `rural-renew` | 3 | 3 | Guides the third proposal and final selection |
+| Workflow | Domain Context | Planner calls | Image generations | Evaluation feedback |
+|---|---|---:|---:|---|
+| `only-prompt` | No house framework or regional guidelines | 1 | 1 | — |
+| `rural-renew` | Eighteen indicators and regional guidelines | 3 | 3 | Guides the third proposal and final selection |
 
-The gallery compares these two complete workflows. The prompt templates retain the original Chinese used for the examples.
+The gallery and the reported 2.23-point mean improvement compare these complete workflows, including their different Context and generation budgets. They do not isolate the effect of evaluation feedback alone. The planner performs the planning, revision, and selection calls; the image editor and evaluator have separate roles. Prompt templates are provided in Chinese.
 
 ## Quick start
 
@@ -66,11 +83,13 @@ In PowerShell, use `$env:QWEN_API_KEY = "your-api-key"`. The runner reads the en
 
 Review [config.example.json](config.example.json) before running. The example configuration records `gpt-5.6-sol` with medium reasoning for planning and `qwen-image-3.0-pro` for image editing. Set model IDs available to your account and a compatible image-service endpoint. Use `--config path/to/config.json` for your own configuration. The planner adapter was checked against Codex CLI 0.146.1.
 
-Run rural-renew on an example photograph:
+Run rural-renew on a photograph from Jilin, using the example province metadata to select the bundled guideline. Add the photograph's actual city, county, or town to the metadata when available:
 
 ```bash
-python run.py --image assets/original/F03.png --group rural-renew --output outputs/F03-rural-renew
+python run.py --image path/to/jilin-scene.png --metadata examples/jilin-location.json --group rural-renew --output outputs/jilin-rural-renew
 ```
+
+For another region, supply its own guideline JSON with `--guidelines path/to/guidelines.json` and the corresponding `--metadata`. Missing guidelines and conflicting region metadata are reported before model services are initialized. The runner does not search the web for guidelines.
 
 Run the single-generation baseline:
 
@@ -78,9 +97,17 @@ Run the single-generation baseline:
 python run.py --image assets/original/F03.png --group only-prompt --output outputs/F03-only-prompt
 ```
 
-Each run writes `selected.png`, its candidate images, plans, and `result.json` to a new output directory. Choose an unused directory for each run. These commands call the configured model services. A service error stops the run and preserves completed files; it does not trigger an automatic retry.
+Each run writes `selected.png`, its candidate images, plans, and `result.json` to a new output directory. Rural-renew also saves the loaded `context.json` and the structured house observations in the initial plan. Choose an unused directory for each run. These commands call the configured model services. A service error stops the run and preserves completed files; it does not trigger an automatic retry.
 
 Optional arguments: `--seed` sets the first generation seed; `--metadata` accepts a JSON file with `imageProv`, `imageCity`, `imageCounty`, `imageTown`, and `imageYear` for location context.
+
+Offline workflow and adapter checks use test doubles and make no model-service calls:
+
+```bash
+python -m unittest discover -s tests -p "test_*.py"
+```
+
+Backbone inference regression tests are opt-in via `RURAL_RENEW_MODEL_TESTS=1`.
 
 ## Repository
 
@@ -88,6 +115,7 @@ Optional arguments: `--seed` sets the first generation seed; `--metadata` accept
 |---|---|
 | [`assets/`](assets/) | 40 original photographs, generated results for the 11 selected scenes, comparison panels, and the overview |
 | [`prompts/`](prompts/) | Single-generation planning, dual proposals, feedback revision, selection, and structured output schemas |
+| [`context/`](context/) | Six aspects, eighteen indicators, two renewal directions, and sourced regional guidelines |
 | [`core/`](core/) | Workflow orchestration and the planner/image-editor adapters |
 | [`eval_model/`](eval_model/) | Five-dimensional inference, learned heads, fixed reference data, and normalization |
 

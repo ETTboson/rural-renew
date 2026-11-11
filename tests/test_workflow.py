@@ -4,11 +4,13 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from jsonschema import ValidationError
 from PIL import Image
 
 from core.workflow import DIMS, run_workflow
+from core.context import CONTEXT_ROOT, read_json
 
 
 class Planner:
@@ -23,9 +25,13 @@ class Planner:
         if stage == "initial":
             if "proposals" not in schema["properties"]:
                 return dict(direction="Repair the facade", edit_prompt="修补外墙并整理入口。")
-            return dict(proposals=[
-                dict(id="P2", direction="Entrance", edit_prompt="整理入口并修补墙裙。"),
-                dict(id="P1", direction="Facade", edit_prompt="修补外墙并整理入口。")],
+            observations = [dict(id=indicator["id"], visibility="uncertain",
+                                 evidence="照片不足以确认具体材质与做法。")
+                            for dimension in read_json(CONTEXT_ROOT / "house_features.json")["dimensions"]
+                            for indicator in dimension["indicators"]]
+            return dict(house_observations=observations, proposals=[
+                dict(id="P2", strategy="locality", direction="Entrance", edit_prompt="整理入口并修补墙裙。"),
+                dict(id="P1", strategy="modernization", direction="Facade", edit_prompt="修补外墙并整理入口。")],
                 difference="更新重点不同。")
         if stage == "revision":
             return dict(observation="Two candidates compared", hypothesis="Combine compatible changes",
@@ -70,8 +76,17 @@ class WorkflowTests(unittest.TestCase):
         self.editor = Editor(self.events)
         self.scorer = Scorer(self.events)
         self.output = self.root / "run"
+        self.guide = self.root / "guide.json"
+        self.guide.write_text(json.dumps(dict(
+            id="test-guide", title="Test guide", region={"imageProv": "吉林省"},
+            source=dict(url="https://example.org/guide", publisher="Test publisher"),
+            guidance=[dict(id="G1", topic="Color", text="TEST_GUIDANCE: retain visible colors.", pages=[1])]
+        ), ensure_ascii=False), encoding="utf-8")
 
     def run_group(self, group, **kwargs):
+        if group == "rural-renew":
+            kwargs.setdefault("metadata", {"imageProv": "吉林省"})
+            kwargs.setdefault("guidelines", self.guide)
         return run_workflow(self.source, group, self.output, self.planner, self.editor,
                             self.scorer, **kwargs)
 
@@ -83,6 +98,10 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result["selected_id"], "candidate_1")
         self.assertNotIn("suspected_error_probability", result["selection"])
         self.assertNotIn("score", result["candidates"][0])
+        self.assertNotIn("领域 Context", self.planner.calls[0]["prompt"])
+        self.assertNotIn("modernization", self.planner.calls[0]["prompt"])
+        self.assertNotIn("house_observations", self.planner.calls[0]["prompt"])
+        self.assertFalse((self.output / "context.json").exists())
 
     def test_professional_feedback_flow_and_actual_selection(self):
         result = self.run_group("rural-renew", seed=42,
@@ -101,6 +120,22 @@ class WorkflowTests(unittest.TestCase):
                          ["original.png", "candidate_1.png", "candidate_2.png"])
         self.assertIn('"candidate_2_minus_candidate_1": {"total": 10', revision["prompt"])
         self.assertEqual(len(selection["images"]), 4)
+        self.assertEqual([c["strategy"] for c in result["candidates"]],
+                         ["modernization", "locality", "feedback_revision"])
+        for call in self.planner.calls:
+            self.assertIn("TEST_GUIDANCE", call["prompt"])
+            self.assertIn('"name": "功能性装饰"', call["prompt"])
+            self.assertIn('"name": "现代化更新"', call["prompt"])
+        for call in (revision, selection):
+            self.assertIn("原图农房十八项观察", call["prompt"])
+            self.assertIn("照片不足以确认具体材质与做法。", call["prompt"])
+        feedback = read_json(self.output / "feedback.json")
+        self.assertEqual(feedback["original"]["total"], 100)
+        self.assertEqual(feedback["gains_over_original"]["candidate_1"]["dimensions"]["ft"], -90)
+        self.assertEqual(feedback["gains_over_original"]["candidate_2"]["total"], -80)
+        snapshot = read_json(self.output / "context.json")
+        self.assertEqual(snapshot["regional_guidelines"]["id"], "test-guide")
+        self.assertEqual(result["context_path"], "context.json")
         self.assertEqual(result["selected_id"], "candidate_1")  # Not the highest-scoring candidate.
         self.assertEqual(result["selection"]["suspected_error_probability"], .25)
         self.assertEqual((self.output / "selected.png").read_bytes(),
@@ -123,6 +158,43 @@ class WorkflowTests(unittest.TestCase):
             self.run_group("rural-renew")
         self.assertEqual(keep.read_text(encoding="utf-8"), "user edits")
         self.assertEqual(self.events, [])
+
+    def test_duplicate_observation_stops_before_editing(self):
+        original_plan = self.planner.plan
+        def duplicate(stage, *args):
+            result = original_plan(stage, *args)
+            if stage == "initial":
+                result["house_observations"][-1] = result["house_observations"][0].copy()
+            return result
+        with patch.object(self.planner, "plan", side_effect=duplicate):
+            with self.assertRaisesRegex(ValueError, "exactly once"):
+                self.run_group("rural-renew")
+        self.assertEqual(self.editor.calls, [])
+        self.assertEqual(self.scorer.calls, [])
+
+    def test_swapped_strategies_stop_before_editing(self):
+        original_plan = self.planner.plan
+        def swap(stage, *args):
+            result = original_plan(stage, *args)
+            if stage == "initial":
+                result["proposals"][0]["strategy"] = "modernization"
+            return result
+        with patch.object(self.planner, "plan", side_effect=swap):
+            with self.assertRaisesRegex(ValueError, "P1 must"):
+                self.run_group("rural-renew")
+        self.assertEqual(self.editor.calls, [])
+
+    def test_region_conflict_stops_before_any_model_call(self):
+        with self.assertRaisesRegex(ValueError, "imageProv"):
+            self.run_group("rural-renew", metadata={"imageProv": "广东省"})
+        self.assertEqual(self.events, [])
+        self.assertFalse(self.output.exists())
+
+    def test_only_prompt_rejects_domain_context(self):
+        with self.assertRaisesRegex(ValueError, "does not accept"):
+            self.run_group("only-prompt", guidelines=self.guide)
+        self.assertEqual(self.events, [])
+        self.assertFalse(self.output.exists())
 
 
 if __name__ == "__main__":

@@ -2,6 +2,58 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "house_observations": {
+      "type": "array",
+      "minItems": 18,
+      "maxItems": 18,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "facade_materials",
+              "facade_colors",
+              "facade_form",
+              "window_opening",
+              "window_type",
+              "window_glazing",
+              "door_material",
+              "door_operation",
+              "door_finish",
+              "roof_material",
+              "roof_type",
+              "roof_slope",
+              "decoration_structural",
+              "decoration_cultural",
+              "decoration_functional",
+              "environment_natural",
+              "environment_cultural",
+              "environment_spatial"
+            ]
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "visible",
+              "uncertain",
+              "not_visible"
+            ]
+          },
+          "evidence": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "id",
+          "visibility",
+          "evidence"
+        ]
+      }
+    },
     "proposals": {
       "type": "array",
       "minItems": 2,
@@ -24,10 +76,18 @@
           "edit_prompt": {
             "type": "string",
             "maxLength": 900
+          },
+          "strategy": {
+            "type": "string",
+            "enum": [
+              "modernization",
+              "locality"
+            ]
           }
         },
         "required": [
           "id",
+          "strategy",
           "direction",
           "edit_prompt"
         ]
@@ -39,6 +99,7 @@
     }
   },
   "required": [
+    "house_observations",
     "proposals",
     "difference"
   ]

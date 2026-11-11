@@ -4,7 +4,10 @@ import argparse
 import json
 from pathlib import Path
 
+from jsonschema import ValidationError
+
 from core import run_workflow
+from core.context import prepare_context
 from core.providers import CodexPlanner, QwenImageEditor
 
 
@@ -15,6 +18,8 @@ def main():
     parser.add_argument("--config", type=Path, default=Path(__file__).parent / "config.example.json")
     parser.add_argument("--output", required=True, type=Path, help="New output directory")
     parser.add_argument("--metadata", type=Path, help="Optional location JSON; see config documentation")
+    parser.add_argument("--guidelines", type=Path,
+                        help="Regional guide JSON matching the scene metadata (Rural-Renew only)")
     parser.add_argument("--seed", type=int, default=2026112600, help="First candidate seed")
     args = parser.parse_args()
     if not args.image.is_file():
@@ -25,6 +30,10 @@ def main():
     metadata = json.loads(args.metadata.read_text(encoding="utf-8-sig")) if args.metadata else {}
     if not isinstance(metadata, dict):
         parser.error("Metadata must be a JSON object")
+    try:
+        prepare_context(args.group, metadata, args.guidelines)
+    except (OSError, ValueError, ValidationError) as error:
+        parser.error(str(error))
     planner = CodexPlanner(config["planner"], args.output, config["editor"]["api_key_env"])
     editor = QwenImageEditor(config["editor"])
     scorer = None
@@ -32,7 +41,7 @@ def main():
         from eval_model import EvaluationScorer
         scorer = EvaluationScorer()
     result = run_workflow(args.image, args.group, args.output, planner, editor, scorer,
-                          metadata=metadata, seed=args.seed)
+                          metadata=metadata, seed=args.seed, guidelines=args.guidelines)
     print("Selected image:", args.output.resolve() / result["selected_path"])
     if "suspected_error_probability" in result["selection"]:
         print("Agent-estimated unintended-edit probability:",

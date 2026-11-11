@@ -11,6 +11,8 @@ from pathlib import Path
 from jsonschema import validate
 from PIL import Image, ImageOps
 
+from .context import context_text, prepare_context, validate_observations
+
 
 PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
 DIMS = dict(ft="乡土性", fy="富裕", hl="活力", yj="宜居", zj="整洁")
@@ -44,7 +46,7 @@ def canonical_image(source, destination, size=None):
 
 
 def run_workflow(image, group, output_dir, planner, editor, scorer=None,
-                 metadata=None, seed=2026112600):
+                 metadata=None, seed=2026112600, guidelines=None):
     """Run one fresh scene; existing output directories are never overwritten.
 
     planner.plan(stage, prompt, images, schema) returns structured JSON.
@@ -56,7 +58,13 @@ def run_workflow(image, group, output_dir, planner, editor, scorer=None,
     if group == "rural-renew" and scorer is None:
         raise ValueError("rural-renew requires the five-dimensional evaluator")
     output_dir = Path(output_dir).resolve()
+    if output_dir.exists():
+        raise FileExistsError(f"Output directory already exists: {output_dir}")
+    domain_context = prepare_context(group, metadata, guidelines)
+    domain_text = context_text(domain_context)
     output_dir.mkdir(parents=True, exist_ok=False)
+    if domain_context is not None:
+        write_json(output_dir / "context.json", domain_context)
     original_path = output_dir / "original.png"
     size = canonical_image(image, original_path)
     location = {key: value for key, value in (metadata or {}).items() if key in LOCATION_KEYS}
@@ -72,9 +80,9 @@ def run_workflow(image, group, output_dir, planner, editor, scorer=None,
         write_json(plans / f"{stage}_output.json", result)
         return result
 
-    # Initial planning sees only the original and optional location metadata.
+    # Only Rural-Renew receives domain context; neither group sees evaluation yet.
     initial_name = "only_prompt" if group == "only-prompt" else "initial_proposals"
-    initial = plan("initial", template(initial_name) + location_text,
+    initial = plan("initial", template(initial_name) + location_text + domain_text,
                    [original_path], schema(initial_name))
     if group == "only-prompt":
         proposals = [initial]
@@ -83,6 +91,10 @@ def run_workflow(image, group, output_dir, planner, editor, scorer=None,
         if set(by_id) != {"P1", "P2"}:
             raise ValueError("Initial proposals must contain distinct P1 and P2 IDs")
         proposals = [by_id["P1"], by_id["P2"]]
+        expected = {d["proposal_id"]: d["id"] for d in domain_context["renewal_directions"]["directions"]}
+        if any(proposal["strategy"] != expected[proposal["id"]] for proposal in proposals):
+            raise ValueError("P1 must use modernization and P2 must use locality")
+        validate_observations(initial["house_observations"], domain_context)
     if any(not item["edit_prompt"].strip() for item in proposals):
         raise ValueError("An edit prompt cannot be empty")
 
@@ -94,7 +106,7 @@ def run_workflow(image, group, output_dir, planner, editor, scorer=None,
     original_score = score(original_path) if group == "rural-renew" else None
     candidates = []
 
-    def generate_candidate(edit_prompt):
+    def generate_candidate(edit_prompt, strategy=None):
         if not edit_prompt.strip():
             raise ValueError("An edit prompt cannot be empty")
         index = len(candidates) + 1
@@ -106,13 +118,15 @@ def run_workflow(image, group, output_dir, planner, editor, scorer=None,
         canonical_image(raw, destination, size)
         candidate = dict(id=candidate_id, path=destination.name, edit_prompt=edit_prompt,
                          seed=candidate_seed)
+        if strategy is not None:
+            candidate["strategy"] = strategy
         if group == "rural-renew":
             candidate["score"] = score(destination)
         candidates.append(candidate)
         write_json(output_dir / f"{candidate_id}.json", candidate)
 
     for proposal in proposals:
-        generate_candidate(proposal["edit_prompt"])
+        generate_candidate(proposal["edit_prompt"], proposal.get("strategy"))
 
     if group == "only-prompt":
         # This baseline has no feedback, revision, or model-based selection call.
@@ -120,28 +134,34 @@ def run_workflow(image, group, output_dir, planner, editor, scorer=None,
     else:
         first, second = [candidate["score"] for candidate in candidates]
         feedback = dict(dimension_names=DIMS, weights=WEIGHTS,
+                        original=original_score,
                         candidate_1=first, candidate_2=second,
+                        gains_over_original={c["id"]: dict(
+                            total=c["score"]["total"] - original_score["total"],
+                            dimensions={dim: c["score"]["dimensions"][dim] - original_score["dimensions"][dim]
+                                        for dim in DIMS}) for c in candidates},
                         candidate_2_minus_candidate_1=dict(total=second["total"] - first["total"],
                             dimensions={dim: second["dimensions"][dim] - first["dimensions"][dim]
                                         for dim in DIMS}))
         write_json(output_dir / "feedback.json", feedback)
-        revision_prompt = template("feedback_revision") + location_text
+        observed_text = "\n原图农房十八项观察：" + json.dumps(initial["house_observations"], ensure_ascii=False)
+        revision_prompt = template("feedback_revision") + location_text + domain_text + observed_text
         revision_prompt += "\n已有候选对应方案（顺序与候选图一致）：" + json.dumps(
-            [dict(id=c["id"], edit_prompt=c["edit_prompt"]) for c in candidates], ensure_ascii=False)
+            [dict(id=c["id"], strategy=c["strategy"], edit_prompt=c["edit_prompt"]) for c in candidates], ensure_ascii=False)
         revision_prompt += "\n图片顺序：原图、" + "、".join(c["id"] for c in candidates) + "。"
         revision_prompt += "\n两张候选的评分反馈：" + json.dumps(feedback, ensure_ascii=False)
         revision = plan("revision", revision_prompt,
                         [original_path] + [output_dir / c["path"] for c in candidates],
                         schema("feedback_revision"))
-        generate_candidate(revision["edit_prompt"])
+        generate_candidate(revision["edit_prompt"], "feedback_revision")
 
         info = dict(dimension_names=DIMS, weights=WEIGHTS, original=original_score,
-                    candidates=[dict(id=c["id"], edit_prompt=c["edit_prompt"], score=c["score"],
+                    candidates=[dict(id=c["id"], strategy=c["strategy"], edit_prompt=c["edit_prompt"], score=c["score"],
                         gain_over_original=c["score"]["total"] - original_score["total"],
                         dimension_gains={dim: c["score"]["dimensions"][dim] -
                                          original_score["dimensions"][dim] for dim in DIMS})
                         for c in candidates])
-        selection_prompt = template("selection") + "\n图片顺序：原图、"
+        selection_prompt = template("selection") + location_text + domain_text + observed_text + "\n图片顺序：原图、"
         selection_prompt += "、".join(c["id"] for c in candidates) + "。"
         selection_prompt += "\n原图及候选信息：" + json.dumps(info, ensure_ascii=False)
         selection = plan("selection", selection_prompt,
@@ -158,5 +178,6 @@ def run_workflow(image, group, output_dir, planner, editor, scorer=None,
                   generations=len(candidates))
     if original_score is not None:
         result["original_score"] = original_score
+        result["context_path"] = "context.json"
     write_json(output_dir / "result.json", result)
     return result
