@@ -61,7 +61,13 @@ Every candidate is edited from the same original photograph. The selection promp
 | `only-prompt` | No house framework or regional guidelines | 1 | 1 | — |
 | `rural-renew` | Eighteen indicators and regional guidelines | 3 | 3 | Guides the third proposal and final selection |
 
-The gallery and the reported 2.23-point mean improvement compare these complete workflows, including their different Context and generation budgets. They do not isolate the effect of evaluation feedback alone. The planner performs the planning, revision, and selection calls; the image editor and evaluator have separate roles. Prompt templates are provided in Chinese.
+## Evaluation model
+
+![Construction of the five-dimensional rural-scene evaluator](assets/evaluator-construction.png)
+
+The research background is the village-scene evaluation work of the UrbanComp team at China University of Geosciences (Wuhan) and collaborators at Sun Yat-sen University. Their work, undertaken in connection with the 2023 national rural construction evaluation initiative, combined crowdsourced photographs from the Cuncunpai platform with human pairwise judgments. See the [UrbanComp project introduction](https://urbancomp.net/archives/intelligent-interpretation-of-chinese-village). Our pairwise perceptual annotation approach draws on [MIT Place Pulse](https://www.media.mit.edu/projects/place-pulse-new/overview/).
+
+The available five-dimensional labels include rural character alongside prosperity, vitality, livability, and cleanliness. The current evaluator keeps the [ResNet50 backbone](https://docs.pytorch.org/vision/stable/models/generated/torchvision.models.resnet50.html) frozen and trains five linear preference heads, then uses fixed training references and per-dimension standardization to produce feedback. The learned heads, reference data, and preprocessing are included; torchvision downloads the fixed ImageNet backbone on first use if needed. See the [construction and inference documentation](eval_model/README.md) for details.
 
 ## Quick start
 
@@ -118,12 +124,4 @@ Backbone inference regression tests are opt-in via `RURAL_RENEW_MODEL_TESTS=1`.
 | [`context/`](context/) | Six aspects, eighteen indicators, two renewal directions, and sourced regional guidelines |
 | [`core/`](core/) | Workflow orchestration and the planner/image-editor adapters |
 | [`eval_model/`](eval_model/) | Five-dimensional inference, learned heads, fixed reference data, and normalization |
-
-## Evaluation model
-
-![Construction of the five-dimensional rural-scene evaluator](assets/evaluator-construction.png)
-
-The research background is the village-scene evaluation work of the UrbanComp team at China University of Geosciences (Wuhan) and collaborators at Sun Yat-sen University. Their work, undertaken in connection with the 2023 national rural construction evaluation initiative, combined crowdsourced photographs from the Cuncunpai platform with human pairwise judgments. See the [UrbanComp project introduction](https://urbancomp.net/archives/intelligent-interpretation-of-chinese-village). Our pairwise perceptual annotation approach draws on [MIT Place Pulse](https://www.media.mit.edu/projects/place-pulse-new/overview/).
-
-The available five-dimensional labels include rural character alongside prosperity, vitality, livability, and cleanliness. The current evaluator keeps the [ResNet50 backbone](https://docs.pytorch.org/vision/stable/models/generated/torchvision.models.resnet50.html) frozen and trains five linear preference heads, then uses fixed training references and per-dimension standardization to produce feedback. The learned heads, reference data, and preprocessing are included; torchvision downloads the fixed ImageNet backbone on first use if needed. See the [construction and inference documentation](eval_model/README.md) for details.
 

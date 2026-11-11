@@ -61,7 +61,13 @@
 | `only-prompt` | 不提供农房指标及地区导则 | 1 次 | 1 次 | — |
 | `rural-renew` | 十八项指标与地区导则 | 3 次 | 3 次 | 指导第三个方案和最终选择 |
 
-案例及平均提高 2.23 分的结果比较的是两套完整流程，包含 Context 与生成次数的差异，不能单独归因于评价反馈。规划、修订与选择由同一个规划模型承担，图像编辑模型和评价器分别承担生图与评分。提示词模板使用中文。
+## 评价模型
+
+![村景五维评价模型的构建流程](assets/evaluator-construction.png)
+
+本项目的研究背景来自中国地质大学（武汉）UrbanComp 团队与中山大学相关团队开展的村景评价研究。该项工作依托 2023 年全国乡村建设评价行动，将“村村拍”平台的众包照片与人工成对感知标注结合起来，详见 [UrbanComp 项目介绍](https://urbancomp.net/archives/intelligent-interpretation-of-chinese-village)。本项目的成对感知标注方式借鉴了 [MIT Place Pulse](https://www.media.mit.edu/projects/place-pulse-new/overview/)。
+
+当前使用的五维标签在富裕、活力、宜居、整洁之外，还包含乡土性。评价器冻结 [ResNet50 骨干](https://docs.pytorch.org/vision/stable/models/generated/torchvision.models.resnet50.html)，训练五个线性偏好预测头，再通过固定训练参考集和逐维标准化形成评价反馈。仓库包含自有预测头、参考数据和预处理；首次使用时，若没有缓存，torchvision 会下载固定的 ImageNet 骨干权重。构建过程和推理定义见[评价模型说明](eval_model/README.md)。
 
 ## 快速开始
 
@@ -118,11 +124,3 @@ python -m unittest discover -s tests -p "test_*.py"
 | [`context/`](context/) | 农房六方面十八指标、两个更新方向与有来源的地区导则 |
 | [`core/`](core/) | 工作流实现与规划、图像编辑服务接口 |
 | [`eval_model/`](eval_model/) | 五维评价推理、自有预测头、固定参考数据和标准化参数 |
-
-## 评价模型
-
-![村景五维评价模型的构建流程](assets/evaluator-construction.png)
-
-本项目的研究背景来自中国地质大学（武汉）UrbanComp 团队与中山大学相关团队开展的村景评价研究。该项工作依托 2023 年全国乡村建设评价行动，将“村村拍”平台的众包照片与人工成对感知标注结合起来，详见 [UrbanComp 项目介绍](https://urbancomp.net/archives/intelligent-interpretation-of-chinese-village)。本项目的成对感知标注方式借鉴了 [MIT Place Pulse](https://www.media.mit.edu/projects/place-pulse-new/overview/)。
-
-当前使用的五维标签在富裕、活力、宜居、整洁之外，还包含乡土性。评价器冻结 [ResNet50 骨干](https://docs.pytorch.org/vision/stable/models/generated/torchvision.models.resnet50.html)，训练五个线性偏好预测头，再通过固定训练参考集和逐维标准化形成评价反馈。仓库包含自有预测头、参考数据和预处理；首次使用时，若没有缓存，torchvision 会下载固定的 ImageNet 骨干权重。构建过程和推理定义见[评价模型说明](eval_model/README.md)。
